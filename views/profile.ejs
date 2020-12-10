@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('partials/header.ejs') %>
+  <body>
+    <%- include('partials/navbar.ejs', {user: loggedInUser}) %>
+    <style>
+      body {
+        font-family: "Open Sans", sans-serif;
+      }
+
+      .fb-profile img.fb-image-lg {
+        z-index: 0;
+        width: 100%;
+        margin-bottom: 10px;
+      }
+
+      .fb-image-profile {
+        margin: -90px 10px 0px 50px;
+        z-index: 9;
+        width: 20%;
+      }
+
+      @media (max-width: 768px) {
+        .fb-profile-text > h1 {
+          font-weight: 700;
+          font-size: 16px;
+        }
+
+        .fb-image-profile {
+          margin: -45px 10px 0px 25px;
+          z-index: 9;
+          width: 20%;
+        }
+      }
+
+      .liked {
+        color: red;
+      }
+      .unliked {
+        color: grey;
+      }
+    </style>
+    <div class="container" style="margin-top: 50px">
+      <div class="fb-profile">
+        <!-- <img
+          align="left"
+          class="fb-image-lg"
+          src="http://lorempixel.com/850/280/nightlife/5/"
+          alt="Profile image example"
+        /> -->
+        <img
+          align="left"
+          id="profile_pic1"
+          class="fb-image-profile thumbnail"
+          src="<%= user.profile_pic %>"
+          alt="Profile image example"
+          style="
+            border: 1px solid;
+            border-radius: 50%;
+            margin-top: -26px;
+            width: 150px;
+          "
+        />
+        <div class="fb-profile-text">
+          <h1><%= user.name %></h1>
+          <p>
+            Posts <span id="post_count"> <%= user.post_count %></span>
+            &nbsp;&nbsp;
+            <span
+              id="btn_followings"
+              type="button"
+              data-toggle="modal"
+              data-target="#exampleModalFollow"
+            >
+              Followings <%= user.followings %>
+            </span>
+            &nbsp;&nbsp;
+            <span
+              id="btn_followers"
+              type="button"
+              data-toggle="modal"
+              data-target="#exampleModalFollow"
+              >Followers <%= user.followers %></span
+            >
+          </p>
+        </div>
+        <%if (loggedInUser._id == user._id) { %>
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-toggle="modal"
+          data-target="#exampleModalCenter"
+        >
+          Edit Profile
+        </button>
+        <% } else { %>
+        <div id="btn_follow_unfollow">
+          <%if (isFollowing) { %>
+          <button type="button" class="btn btn-primary" id="btn_unfollow">
+            UnFollow
+          </button>
+          <% } else { %>
+          <button type="button" class="btn btn-primary" id="btn_follow">
+            Follow
+          </button>
+          <% } %>
+        </div>
+
+        <% } %>
+      </div>
+    </div>
+    <br />
+    <br />
+    <br />
+    <div class="container" id="post_list"></div>
+
+    <!-- Modal -->
+    <div
+      class="modal fade"
+      id="exampleModalCenter"
+      tabindex="-1"
+      role="dialog"
+      aria-labelledby="exampleModalCenterTitle"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="exampleModalLongTitle">Modal title</h5>
+            <button
+              type="button"
+              class="close"
+              data-dismiss="modal"
+              aria-label="Close"
+            >
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <form id="fileUploadForm" enctype="multipart/form-data">
+              <div class="form-group">
+                <label for="profile_pic_modal">Profile picture</label>
+                <input
+                  type="file"
+                  class="form-control-file"
+                  id="profile_pic_modal"
+                />
+              </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-dismiss="modal"
+            >
+              Close
+            </button>
+            <button type="button" class="btn btn-primary" id="btn_edit_profile">
+              Save changes
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="modal fade"
+      id="exampleModalFollow"
+      tabindex="-1"
+      role="dialog"
+      aria-labelledby="exampleModalCenterTitle"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="followTitle">Modal title</h5>
+            <button
+              type="button"
+              class="close"
+              data-dismiss="modal"
+              aria-label="Close"
+            >
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body" id="follow_list"></div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-dismiss="modal"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function toggleLikeBtn(btnId) {
+        $(`#${btnId}`).toggleClass("liked unliked");
+        $(`#${btnId}`).data("likedStatus", !$(`#${btnId}`).data("likedStatus"));
+      }
+    </script>
+
+    <script>
+      const user = JSON.parse(`<%- JSON.stringify(user) %>`);
+      const loggedInUser = JSON.parse(`<%- JSON.stringify(loggedInUser) %>`);
+
+      $(document).ready(function () {
+        getPosts();
+      });
+
+      function gereratePost(post) {
+        let media = "";
+        if (post.type == "IMAGE") {
+          media = `<img src="${post.url}" style="max-width: 600px;max-height: 650px;">`;
+        } else if (post.type == "VIDEO") {
+          media = `
+            <video width="400" height="650" controls autoplay muted>
+              <source src="${post.url}" type="video/mp4">
+            </video>`;
+        }
+        let deletePostBtn = "";
+        if (user._id == loggedInUser._id) {
+          deletePostBtn = `<button
+                          id="btn_delete"
+                          data-post-Id="${post._id}"
+                          type="button"
+                          class="btn btn-small btn-secondary "
+                          style="margin-top:10px">
+                          Delete Post
+                        </button>`;
+        }
+        return ` <div class="card mb-3" id="post_${post._id}">
+                    <div class="row">
+                      <div class="col-sm-1">
+                          <img src="${
+                            post.user.profile_pic
+                          }" class="card-img-top" alt="..." /> 
+                        </div>
+                      <div class="col-sm-9 title">
+                         <h3 style="margin-left:5px;margin-top:6px">${
+                           post.user.name
+                         }</h3>
+                         <small class="text-muted" >Last updated ${moment(
+                           post.updatedAt
+                         ).fromNow()}</small>
+                       </div>
+                       <div class="col-sm-2">
+                          ${deletePostBtn}
+                        </div>
+                      </div>
+                      
+                    <center>
+                    <div class="card-body">
+                      ${media}
+                      <h5 class="card-title">${post.caption}</h5>
+
+                      <p class="card-text">
+                        
+                      </p>
+                    </div>
+                    <i
+                    class="fa fa-heart btn_like ${
+                      post.liked.length === 0 ? "unliked" : "liked"
+                    }"
+                    id="btn_like_${post._id}"
+                    data-post-Id="${post._id.toString()}"
+                    data-liked-Status="${
+                      post.liked.length === 0 ? false : true
+                    }"
+                    style="font-size:36px;"></i>
+                    <span id="like_count_${post._id}">${post.like_count}</span>
+                    </center>
+                   
+                  </div>`;
+      }
+
+      function getPosts() {
+        $.ajax({
+          method: "GET",
+          url: `/users/${user._id}/posts`,
+
+          success: (response) => {
+            if (response.data.length > 0) {
+              response.data.forEach((post) => {
+                console.log(post);
+                $("#post_list").append(gereratePost(post));
+              });
+            }
+          },
+          error: (error) => {
+            console.log(error);
+          },
+        });
+      }
+
+      $(document).on("click", "#btn_delete", function () {
+        const postId = $(this).data("postId");
+        console.log(postId);
+        $.ajax({
+          url: `/posts/${postId}`,
+          method: "DELETE",
+          success: (response) => {
+            console.log(response);
+            $(`#post_${postId}`).remove();
+            const postCount = +$("#post_count").html();
+            $("#post_count").html(postCount - 1);
+          },
+          error: (error) => {
+            console.log(error);
+          },
+        });
+      });
+
+      $(document).on("click", "#btn_edit_profile", (event) => {
+        //stop submit the form, we will post it manually.
+        event.preventDefault();
+
+        // Get form
+        var form = $("#fileUploadForm")[0];
+
+        // Create an FormData object
+        var data = new FormData(form);
+
+        // If you want to add an extra field for the FormData
+        data.append("avatar", $("#profile_pic_modal")[0].files[0]);
+
+        // disabled the submit button
+        $("#btn_edit_profile").prop("disabled", true);
+
+        $.ajax({
+          url: "/users/profile-pic",
+          data: data,
+          enctype: "multipart/form-data",
+          processData: false, // Important!
+          contentType: false,
+          cache: false,
+          type: "PUT",
+          success: function (response) {
+            if (response.success) {
+              $("#exampleModalCenter").hide();
+              $("body").removeClass("modal-open");
+              $(".modal-backdrop").remove();
+              $("#profile_pic1").attr("src", response.data.profile_pic);
+            }
+            console.log(response);
+            // do something with the result
+          },
+        });
+      });
+
+      $(document).on("click", ".btn_like", function () {
+        const postId = $(this).data("postId");
+        const likedStatus = $(this).data("likedStatus");
+        const likeCount = +$(`#like_count_${postId}`).html();
+
+        const url = likedStatus
+          ? `/posts/${postId}/unlike`
+          : `/posts/${postId}/like`;
+
+        $.ajax({
+          method: "POST",
+          url: url,
+
+          success: (response) => {
+            console.log(response);
+            const newLikedCount = likedStatus ? likeCount - 1 : likeCount + 1;
+            $(`#like_count_${postId}`).html(newLikedCount);
+            toggleLikeBtn($(this).attr("id"));
+          },
+          error: (error) => {
+            console.log(error);
+          },
+        });
+      });
+
+      $(document).on("click", "#btn_follow", function () {
+        $.ajax({
+          url: `/users/${user._id}/follow`,
+          method: "POST",
+          success: (response) => {
+            console.log(response);
+            $("#btn_follow_unfollow").html(`
+              <button type="button" class="btn btn-primary" id="btn_unfollow">UnFollow</button>
+            `);
+          },
+          error: (error) => {
+            console.log(error);
+          },
+        });
+      });
+      $(document).on("click", "#btn_unfollow", function () {
+        $.ajax({
+          url: `/users/${user._id}/unfollow`,
+          method: "POST",
+          success: (response) => {
+            console.log(response);
+            $("#btn_follow_unfollow").html(`
+              <button type="button" class="btn btn-primary" id="btn_follow">Follow</button>
+            `);
+          },
+          error: (error) => {
+            console.log(error);
+          },
+        });
+      });
+
+      $(document).on("click", "#btn_followings", function () {
+        $("#followTitle").html("Following");
+        $("#follow_list").html("");
+        $.ajax({
+          url: `/users/${user._id}/followings`,
+          method: "GET",
+          success: (response) => {
+            console.log(response);
+            if (response.data.length == 0) return;
+            response.data.forEach((following) => {
+              $("#follow_list").append(`
+                <a href="/users/${following.followed_user._id}">
+                  <div class="row">
+                    <div class="col-sm-2">
+                      <img
+                        src="${following.followed_user.profile_pic}"
+                        class="card-img-top"
+                        alt="..."
+                      />
+                    </div>
+                    <div class="col-sm-10">
+                      <h4 style="margin-left: 0px; margin-top: 20px; color: black">
+                        ${following.followed_user.name}
+                      </h4>
+                    </div>
+                  </div>
+                </a>
+              `);
+            });
+          },
+          error: (error) => {
+            console.log(error);
+          },
+        });
+      });
+
+      $(document).on("click", "#btn_followers", function () {
+        $("#followTitle").html("Followers");
+        $("#follow_list").html("");
+        $.ajax({
+          url: `/users/${user._id}/followers`,
+          method: "GET",
+          success: (response) => {
+            console.log(response);
+            if (response.data.length == 0) return;
+            response.data.forEach((follower) => {
+              $("#follow_list").append(`
+                <a href="/users/${follower.user._id}">
+                  <div class="row">
+                    <div class="col-sm-2">
+                      <img
+                        src="${follower.user.profile_pic}"
+                        class="card-img-top"
+                        alt="..."
+                      />
+                    </div>
+                    <div class="col-sm-10">
+                      <h4 style="margin-left: 0px; margin-top: 20px; color: black">
+                        ${follower.user.name}
+                      </h4>
+                    </div>
+                  </div>
+                </a>
+              `);
+            });
+          },
+          error: (error) => {
+            console.log(error);
+          },
+        });
+      });
+    </script>
+  </body>
+</html>

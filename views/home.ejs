@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('partials/header.ejs') %>
+  <body>
+    <%- include('partials/navbar.ejs', {user: user}) %>
+
+    <div class="container">
+      <form id="create_post_form">
+        <div class="form-group">
+          <label for="form_caption">Create Post</label>
+          <textarea
+            class="form-control"
+            id="form_caption"
+            rows="3"
+            placeholder="What's on your mind"
+          ></textarea>
+        </div>
+        <input type="file" class="form-control-file" id="btn_input_post" />
+        <button
+          class="btn btn-primary btn-block"
+          id="btn_create_post"
+          style="margin-bottom: 20px"
+        >
+          Submit
+        </button>
+      </form>
+    </div>
+
+    <div class="container" id="post_list"></div>
+
+    <script>
+      $(document).ready(function () {
+        getPosts();
+      });
+
+      function gereratePost(post) {
+        let media = "";
+        if (post.type == "IMAGE") {
+          media = `<img src="${post.url}" style="max-width: 600px;max-height: 650px;">`;
+        } else if (post.type == "VIDEO") {
+          media = `
+            <video width="400" height="650" controls autoplay muted>
+              <source src="${post.url}" type="video/mp4">
+            </video>`;
+        }
+
+        return ` <div class="card mb-3">
+                  <a href="/users/${post.user._id}">
+                    <div class="row">
+                      
+                        <div class="col-sm-1">
+                            <img src="${
+                              post.user.profile_pic
+                            }" class="card-img-top" alt="..." /> 
+                        </div>
+                        <div class="col-sm-11">
+                          <h3 style="margin-left:0px;margin-top:20px;color:black">${
+                            post.user.name
+                          }</h3>
+                        </div>
+                    </div>
+                  </a>
+
+                    <center>
+                    <div class="card-body">
+                      
+                      ${media}
+                      <h5 class="card-title">${post.caption}</h5>
+                      <p class="card-text">
+                        <small class="text-muted">Last updated ${moment(
+                          post.updatedAt
+                        ).fromNow()}</small>
+                      </p>
+                    </div>
+                    </center>
+                  </div>`;
+      }
+
+      function getPosts() {
+        $.ajax({
+          method: "GET",
+          url: "/posts",
+
+          success: (response) => {
+            if (response.data.length > 0) {
+              response.data.forEach((post) => {
+                console.log(post);
+                $("#post_list").append(gereratePost(post));
+              });
+            }
+          },
+          error: (error) => {
+            console.log(error);
+          },
+        });
+      }
+
+      $(document).on("click", "#btn_create_post", (e) => {
+        event.preventDefault();
+
+        const caption = $("#form_caption").val();
+        const post = $("#btn_input_post")[0].files[0];
+
+        if (!caption && !post) return;
+
+        // Get form
+        var form = $("#create_post_form")[0];
+
+        // Create an FormData object
+        var data = new FormData(form);
+
+        // If you want to add an extra field for the FormData
+        if (caption) data.append("caption", caption);
+        if (post) data.append("avatar", post);
+
+        // disabled the submit button
+        $("#btn_create_post").prop("disabled", true);
+
+        $.ajax({
+          method: "POST",
+          url: "/posts",
+          data: data,
+          enctype: "multipart/form-data",
+          processData: false, // Important!
+          contentType: false,
+          cache: false,
+
+          success: (response) => {
+            console.log(response);
+            if (response.success) {
+              $("#post_list").prepend(gereratePost(response.data));
+            }
+
+            $("#form_caption").val("");
+            $("#btn_create_post").prop("disabled", false);
+          },
+          error: (error) => {
+            console.log(error);
+          },
+        });
+      });
+    </script>
+  </body>
+</html>
